@@ -376,7 +376,6 @@ class NodeScopeResolver
 			&& !$stmt instanceof Foreach_
 			&& !$stmt instanceof Node\Stmt\Global_
 			&& !$stmt instanceof Node\Stmt\Property
-			&& !$stmt instanceof Node\Stmt\PropertyProperty
 			&& !$stmt instanceof Node\Stmt\ClassConst
 			&& !$stmt instanceof Node\Stmt\Const_
 		) {
@@ -739,7 +738,9 @@ class NodeScopeResolver
 			$this->processAttributeGroups($stmt, $stmt->attrGroups, $scope, $nodeCallback);
 
 			foreach ($stmt->props as $prop) {
-				$this->processStmtNode($prop, $scope, $nodeCallback, $context);
+				if ($prop->default !== null) {
+					$this->processExprNode($stmt, $prop->default, $scope, $nodeCallback, ExpressionContext::createDeep());
+				}
 				[,,,,,,,,,,$isReadOnly, $docComment, ,,,$varTags, $isAllowedPrivateMutation] = $this->getPhpDocs($scope, $stmt);
 				if (!$scope->isInClass()) {
 					throw new ShouldNotHappenException();
@@ -774,12 +775,6 @@ class NodeScopeResolver
 
 			if ($stmt->type !== null) {
 				$nodeCallback($stmt->type, $scope);
-			}
-		} elseif ($stmt instanceof Node\Stmt\PropertyProperty) {
-			$hasYield = false;
-			$throwPoints = [];
-			if ($stmt->default !== null) {
-				$this->processExprNode($stmt, $stmt->default, $scope, $nodeCallback, ExpressionContext::createDeep());
 			}
 		} elseif ($stmt instanceof If_) {
 			$conditionType = ($this->treatPhpDocTypesAsCertain ? $scope->getType($stmt->cond) : $scope->getNativeType($stmt->cond))->toBoolean();
@@ -1515,7 +1510,7 @@ class NodeScopeResolver
 			$hasYield = false;
 			$throwPoints = [];
 			foreach ($stmt->uses as $use) {
-				$this->processStmtNode($use, $scope, $nodeCallback, $context);
+				$nodeCallback($use, $scope);
 			}
 		} elseif ($stmt instanceof Node\Stmt\Global_) {
 			$hasYield = false;
@@ -1599,14 +1594,11 @@ class NodeScopeResolver
 		} elseif ($stmt instanceof Node\Stmt\Nop) {
 			$hasYield = false;
 			$throwPoints = $overridingThrowPoints ?? [];
-		} elseif ($stmt instanceof Node\Stmt\UseUse) {
-			$hasYield = false;
-			$throwPoints = [];
 		} elseif ($stmt instanceof Node\Stmt\GroupUse) {
 			$hasYield = false;
 			$throwPoints = [];
 			foreach ($stmt->uses as $use) {
-				$this->processStmtNode($use, $scope, $nodeCallback, $context);
+				$nodeCallback($use, $scope);
 			}
 		} else {
 			$hasYield = false;
